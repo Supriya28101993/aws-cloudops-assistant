@@ -3,6 +3,7 @@
 Owner: Cloud Operations Team. Applies to all production and non-production EC2 instances.
 
 ## 1. Cannot SSH into an EC2 instance
+
 1. Check that the security group allows inbound TCP port 22 from your IP address only, never from 0.0.0.0/0.
 2. Check that the subnet network ACL allows inbound port 22 and outbound ephemeral ports 1024-65535.
 3. Check that the instance has a public IP and the subnet route table has a route 0.0.0.0/0 to an Internet Gateway.

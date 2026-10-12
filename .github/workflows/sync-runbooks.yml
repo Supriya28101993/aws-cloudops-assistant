@@ -1,0 +1,52 @@
+name: Sync runbooks to Knowledge Base
+
+on:
+  push:
+    branches: [main]
+    paths: ["runbooks/**"]
+  workflow_dispatch:   # allows a manual "Run workflow" button
+
+permissions:
+  id-token: write      # needed for OIDC login to AWS
+  contents: read
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Log in to AWS with OIDC (no stored keys)
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ vars.AWS_REGION }}
+
+      - name: Upload runbooks to S3
+        run: aws s3 sync runbooks/ "s3://${{ vars.S3_BUCKET }}/" --delete
+
+      - name: Start Knowledge Base sync
+        id: ingest
+        run: |
+          JOB_ID=$(aws bedrock-agent start-ingestion-job \
+            --knowledge-base-id "${{ vars.KB_ID }}" \
+            --data-source-id "${{ vars.DATA_SOURCE_ID }}" \
+            --query 'ingestionJob.ingestionJobId' --output text)
+          echo "job_id=$JOB_ID" >> "$GITHUB_OUTPUT"
+          echo "Started ingestion job $JOB_ID"
+
+      - name: Wait for sync to finish
+        run: |
+          for i in $(seq 1 60); do
+            STATUS=$(aws bedrock-agent get-ingestion-job \
+              --knowledge-base-id "${{ vars.KB_ID }}" \
+              --data-source-id "${{ vars.DATA_SOURCE_ID }}" \
+              --ingestion-job-id "${{ steps.ingest.outputs.job_id }}" \
+              --query 'ingestionJob.status' --output text)
+            echo "Status: $STATUS"
+            [ "$STATUS" = "COMPLETE" ] && exit 0
+            [ "$STATUS" = "FAILED" ] && exit 1
+            sleep 10
+          done
+          echo "Timed out waiting for the sync"; exit 1

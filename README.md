@@ -46,6 +46,19 @@ screenshots/                Demo screenshot
 5. Create a Function URL (CORS: allow origin `*`, method POST).
 6. Open `web/index.html` and paste the Function URL.
 
+## Auto-sync pipeline (CI/CD)
+Runbooks live in this repo. Pushing a change to `runbooks/` updates the chatbot automatically:
+```
+git push (runbooks/**) ──> GitHub Actions
+                             1. Log in to AWS with OIDC (no stored access keys)
+                             2. aws s3 sync runbooks/ → S3 bucket (--delete removes deleted runbooks)
+                             3. bedrock-agent start-ingestion-job → Knowledge Base re-syncs
+                             4. Wait until the sync is COMPLETE
+```
+- Workflow: `.github/workflows/sync-runbooks.yml`
+- IAM permissions for the GitHub role: `iam/github-actions-permissions.json` (least privilege: one bucket, one Knowledge Base)
+- Repo variables: `AWS_ROLE_ARN`, `AWS_REGION`, `S3_BUCKET`, `KB_ID`, `DATA_SOURCE_ID`
+
 ## Future improvements
 - Add live AWS checks (for example, read a security group's rules with Boto3) alongside the runbook answers
 - Login with Amazon Cognito
